@@ -319,14 +319,14 @@ where
 
     ///
     /// Shared proposal path: builds the change strategy and asks the backend for a proposal for `request`.
-    /// The outer error is a setup failure; the inner `Err(())` is a backend refusal (e.g. insufficient
+    /// The outer error is a setup failure; the inner `Err` is the backend's refusal (debug text) (e.g. insufficient
     /// balance), left for each caller to describe in its own words.
     ///
     async fn propose_request(
         &self,
         account_id: AccountId,
         request: TransactionRequest,
-    ) -> Result<Result<Proposal<StandardFeeRule, NoteRef>, ()>, Error> {
+    ) -> Result<Result<Proposal<StandardFeeRule, NoteRef>, String>, Error> {
         let input_selector = GreedyInputSelector::new();
 
         let change_pool = self.change_pool().await?;
@@ -368,7 +368,7 @@ where
             None,
             None,
         );
-        Ok(proposal.map_err(|_e| ()))
+        Ok(proposal.map_err(|e| format!("{:?}", e)))
     }
 
     ///
@@ -416,11 +416,13 @@ where
         self.propose_validated(account_id, validated).await
     }
 
-    async fn propose_validated(
+    /// Fails with `InsufficientFunds` if the payments exceed the account's spendable shielded balance.
+    /// With no balance summary yet, the check is skipped and the backend decides.
+    async fn check_balance_covers(
         &self,
         account_id: AccountId,
-        validated: ValidatedPayments,
-    ) -> Result<Proposal<StandardFeeRule, NoteRef>, Error> {
+        validated: &ValidatedPayments,
+    ) -> Result<(), Error> {
         let summary = self
             .db
             .read()
@@ -432,6 +434,15 @@ where
         {
             check_spendable(validated.total(), spendable_shielded(balance))?;
         }
+        Ok(())
+    }
+
+    async fn propose_validated(
+        &self,
+        account_id: AccountId,
+        validated: ValidatedPayments,
+    ) -> Result<Proposal<StandardFeeRule, NoteRef>, Error> {
+        self.check_balance_covers(account_id, &validated).await?;
         let proposal = self
             .propose_request(account_id, validated.request)
             .await?
@@ -738,40 +749,69 @@ where
             ));
         }
 
-        // Create the PCZT.
-        let change_pool = self.change_pool().await?;
-        let change_strategy = MultiOutputChangeStrategy::new(
-            StandardFeeRule::Zip317,
-            None,
-            change_pool,
-            DustOutputPolicy::default(),
-            SplitPolicy::with_min_output_value(
-                NonZeroUsize::new(self.target_note_count)
-                    .ok_or(Error::FailedToCreateTransaction)?,
-                Zatoshis::from_u64(self.min_split_output_value)?,
-            ),
-        );
-
-        let input_selector = GreedyInputSelector::new();
         let request = TransactionRequest::new(vec![Payment::without_memo(
             to_address,
             Zatoshis::from_u64(value)?,
         )])?;
+        self.pczt_from_request(account_id, request, |e| {
+            Error::Generic(format!("something bad happened when calling propose transfer. Possibly insufficient balance... {}", e))
+        })
+        .await
+    }
+
+    ///
+    /// Create a PCZT paying one or more recipients, each with an optional memo.
+    /// Validated like `propose_payments`; the PCZT still needs proving, signing and sending.
+    ///
+    pub async fn pczt_create_payments(
+        &self,
+        account_id: AccountId,
+        payments: Vec<PaymentSpec>,
+    ) -> Result<Pczt, Error> {
+        let validated = validate_payments(self.network.network_type(), &payments)?;
+        self.pczt_create_validated(account_id, validated).await
+    }
+
+    ///
+    /// Create a PCZT from a ZIP 321 payment URI.
+    ///
+    pub async fn pczt_create_from_zip321(
+        &self,
+        account_id: AccountId,
+        uri: &str,
+    ) -> Result<Pczt, Error> {
+        let validated = validate_uri(self.network.network_type(), uri)?;
+        self.pczt_create_validated(account_id, validated).await
+    }
+
+    async fn pczt_create_validated(
+        &self,
+        account_id: AccountId,
+        validated: ValidatedPayments,
+    ) -> Result<Pczt, Error> {
+        self.check_balance_covers(account_id, &validated).await?;
+        self.pczt_from_request(account_id, validated.request, |_| {
+            PaymentsError::Proposal(
+                "the wallet could not build a transaction for these payments".to_string(),
+            )
+            .into()
+        })
+        .await
+    }
+
+    /// Shared tail of the PCZT paths: propose for `request`, then build the PCZT.
+    /// `on_refused` turns the backend's refusal text into the caller's error.
+    async fn pczt_from_request(
+        &self,
+        account_id: AccountId,
+        request: TransactionRequest,
+        on_refused: impl FnOnce(String) -> Error,
+    ) -> Result<Pczt, Error> {
+        let proposal = self
+            .propose_request(account_id, request)
+            .await?
+            .map_err(on_refused)?;
         let mut db = self.db.write().await;
-        let proposal = propose_transfer::<_, _, _,_, <W as WalletCommitmentTrees>::Error>(
-            &mut *db,
-            &self.network,
-            account_id,
-            &input_selector,
-            &change_strategy,
-            request,
-            self.min_confirmations,
-            &SpendPolicy::default(),
-            // client_backend 0.25 added optional input locking; no locks are held across calls.
-            None,
-            None,
-        )
-            .map_err(|e| Error::Generic(format!("something bad happened when calling propose transfer. Possibly insufficient balance... {e:?}")))?;
         tracing::info!("PCZT proposal created");
         let pczt = create_pczt_from_proposal::<
             _,

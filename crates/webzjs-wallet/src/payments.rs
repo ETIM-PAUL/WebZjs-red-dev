@@ -80,6 +80,10 @@ pub enum PaymentsError {
     MemoTooLong { index: usize, len: usize },
     /// The payments add up to more than can be represented.
     TotalOverflow,
+    /// A payment from JavaScript is not an object with a string `to` and a whole-number `value`.
+    MalformedPayment { index: usize },
+    /// A memo from JavaScript is neither a string nor a `Uint8Array`.
+    InvalidMemoType { index: usize },
     /// The payments total more than the account can currently spend.
     InsufficientFunds { requested: u64, spendable: u64 },
     /// The payment URI could not be parsed.
@@ -102,6 +106,8 @@ impl PaymentsError {
             PaymentsError::ZeroValuedTransparentOutput { .. } => "zero_valued_transparent_output",
             PaymentsError::MemoForTransparentRecipient { .. } => "memo_for_transparent_recipient",
             PaymentsError::MemoTooLong { .. } => "memo_too_long",
+            PaymentsError::MalformedPayment { .. } => "malformed_payment",
+            PaymentsError::InvalidMemoType { .. } => "invalid_memo_type",
             PaymentsError::TotalOverflow => "total_overflow",
             PaymentsError::InsufficientFunds { .. } => "insufficient_funds",
             PaymentsError::InvalidUri(_) => "invalid_uri",
@@ -142,6 +148,14 @@ impl fmt::Display for PaymentsError {
             PaymentsError::MemoTooLong { index, len } => write!(
                 f,
                 "Payment {index}: the memo is {len} bytes, but at most {MAX_MEMO_BYTES} are allowed"
+            ),
+            PaymentsError::MalformedPayment { index } => write!(
+                f,
+                "Payment {index}: expected an object with a string `to`, a whole-number `value` in zatoshis and an optional `memo`"
+            ),
+            PaymentsError::InvalidMemoType { index } => write!(
+                f,
+                "Payment {index}: a memo must be a string (text) or a Uint8Array (raw bytes)"
             ),
             PaymentsError::TotalOverflow => write!(f, "The payments add up to too large an amount"),
             PaymentsError::InsufficientFunds {
@@ -410,6 +424,105 @@ pub fn spendable_shielded(balance: &AccountBalance) -> Zatoshis {
     ]
     .into_iter()
     .fold(Zatoshis::ZERO, |acc, v| (acc + v).unwrap_or(acc))
+}
+
+/// How a memo reads back to a caller: text when it is a ZIP 302 text memo, the raw 512 bytes
+/// otherwise. Raw bytes are never trimmed, because trailing zeros cannot be told apart from
+/// payload: what is reported is exactly what goes on chain.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MemoView {
+    Text(String),
+    Bytes(Vec<u8>),
+}
+
+impl MemoView {
+    /// `None` for the empty memo (`0xF6` followed by zeros), which means "no memo".
+    pub fn from_memo_bytes(bytes: &MemoBytes) -> Option<Self> {
+        match Memo::try_from(bytes) {
+            Ok(Memo::Empty) => None,
+            Ok(Memo::Text(t)) => Some(MemoView::Text(String::from(t))),
+            // Arbitrary data, future formats and undecodable text all report the raw bytes.
+            _ => Some(MemoView::Bytes(bytes.as_array().to_vec())),
+        }
+    }
+}
+
+/// One output the proposal pays to a recipient.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OutputSummary {
+    pub to: String,
+    pub value: u64,
+    pub memo: Option<MemoView>,
+}
+
+/// One change output the wallet adds back to itself.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChangeSummary {
+    /// `"sapling"`, `"orchard"`, `"ironwood"` or `"transparent"`.
+    pub pool: &'static str,
+    pub value: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StepSummary {
+    pub outputs: Vec<OutputSummary>,
+    pub change: Vec<ChangeSummary>,
+    /// ZIP 317 fee of this step, in zatoshis.
+    pub fee: u64,
+}
+
+/// What a proposal will do, for showing to a user before they approve it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProposalSummary {
+    /// Total ZIP 317 fee over all steps, in zatoshis.
+    pub fee: u64,
+    pub steps: Vec<StepSummary>,
+}
+
+fn pool_name(pool: zcash_protocol::PoolType) -> &'static str {
+    use zcash_protocol::{PoolType, ShieldedPool};
+    match pool {
+        PoolType::Transparent => "transparent",
+        PoolType::Shielded(ShieldedPool::Sapling) => "sapling",
+        PoolType::Shielded(ShieldedPool::Orchard) => "orchard",
+        PoolType::Shielded(ShieldedPool::Ironwood) => "ironwood",
+    }
+}
+
+/// Describe a proposal: its fee and the outputs it pays.
+pub fn summarize_proposal<FeeRuleT, NoteRef>(
+    proposal: &zcash_client_backend::proposal::Proposal<FeeRuleT, NoteRef>,
+) -> ProposalSummary {
+    let steps: Vec<StepSummary> = proposal
+        .steps()
+        .iter()
+        .map(|step| StepSummary {
+            outputs: step
+                .transaction_request()
+                .payments()
+                .values()
+                .map(|p| OutputSummary {
+                    to: p.recipient_address().encode(),
+                    value: p.amount().map(u64::from).unwrap_or(0),
+                    memo: p.memo().and_then(MemoView::from_memo_bytes),
+                })
+                .collect(),
+            change: step
+                .balance()
+                .proposed_change()
+                .iter()
+                .map(|c| ChangeSummary {
+                    pool: pool_name(c.output_pool()),
+                    value: u64::from(c.value()),
+                })
+                .collect(),
+            fee: u64::from(step.balance().fee_required()),
+        })
+        .collect();
+    ProposalSummary {
+        fee: steps.iter().map(|s| s.fee).sum(),
+        steps,
+    }
 }
 
 #[cfg(test)]
@@ -814,6 +927,8 @@ mod tests {
                 requested: 2,
                 spendable: 1,
             },
+            PaymentsError::MalformedPayment { index: 0 },
+            PaymentsError::InvalidMemoType { index: 0 },
             PaymentsError::InvalidUri(String::new()),
             PaymentsError::Proposal(String::new()),
         ];
@@ -826,5 +941,21 @@ mod tests {
         assert!(PaymentsError::MemoTooLong { index: 3, len: 600 }
             .to_string()
             .contains("Payment 3"));
+    }
+
+    #[test]
+    fn memo_view_reports_text_bytes_and_nothing() {
+        let text = MemoBytes::from(&"hi there".parse::<Memo>().unwrap());
+        assert_eq!(
+            MemoView::from_memo_bytes(&text),
+            Some(MemoView::Text("hi there".into()))
+        );
+
+        let mut raw = vec![0xFF, 1, 2, 3];
+        let bin = MemoBytes::from_bytes(&raw).unwrap();
+        raw.resize(512, 0);
+        assert_eq!(MemoView::from_memo_bytes(&bin), Some(MemoView::Bytes(raw)));
+
+        assert_eq!(MemoView::from_memo_bytes(&MemoBytes::empty()), None);
     }
 }

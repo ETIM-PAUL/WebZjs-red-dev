@@ -97,7 +97,12 @@ pub enum Error {
 
 impl From<Error> for JsValue {
     fn from(e: Error) -> Self {
-        js_sys::Error::new(&e.to_string()).into()
+        let js_error = js_sys::Error::new(&e.to_string());
+        // Typed payment errors carry a stable `code` so callers need not parse the message.
+        if let Error::Payments(p) = &e {
+            let _ = js_sys::Reflect::set(&js_error, &"code".into(), &p.code().into());
+        }
+        js_error.into()
     }
 }
 
