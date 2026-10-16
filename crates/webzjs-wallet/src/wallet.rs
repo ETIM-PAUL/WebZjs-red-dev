@@ -10,6 +10,10 @@ use tonic::{
 
 use crate::chain_params::{change_pool_at, orchard_circuit_version, WalletClock};
 use crate::error::Error;
+use crate::payments::{
+    check_spendable, spendable_shielded, validate_payments, validate_uri, PaymentSpec,
+    PaymentsError, ValidatedPayments,
+};
 use crate::BlockRange;
 use webzjs_common::Network;
 
@@ -314,14 +318,15 @@ where
     }
 
     ///
-    /// Create a transaction proposal to send funds from the wallet to a given address
+    /// Shared proposal path: builds the change strategy and asks the backend for a proposal for `request`.
+    /// The outer error is a setup failure; the inner `Err(())` is a backend refusal (e.g. insufficient
+    /// balance), left for each caller to describe in its own words.
     ///
-    pub async fn propose_transfer(
+    async fn propose_request(
         &self,
         account_id: AccountId,
-        to_address: ZcashAddress,
-        value: u64,
-    ) -> Result<Proposal<StandardFeeRule, NoteRef>, Error> {
+        request: TransactionRequest,
+    ) -> Result<Result<Proposal<StandardFeeRule, NoteRef>, ()>, Error> {
         let input_selector = GreedyInputSelector::new();
 
         let change_pool = self.change_pool().await?;
@@ -336,10 +341,6 @@ where
                 Zatoshis::from_u64(self.min_split_output_value)?,
             ),
         );
-        let request = TransactionRequest::new(vec![Payment::without_memo(
-            to_address,
-            Zatoshis::from_u64(value)?,
-        )])?;
 
         tracing::info!("Chain height: {:?}", self.db.read().await.chain_height()?);
         tracing::info!(
@@ -350,7 +351,7 @@ where
                 .get_target_and_anchor_heights(self.min_confirmations.trusted())?
         );
         let mut db = self.db.write().await;
-        let proposal = propose_transfer::<_, _, _,_, <W as WalletCommitmentTrees>::Error>(
+        let proposal = propose_transfer::<_, _, _, _, <W as WalletCommitmentTrees>::Error>(
             &mut *db,
             &self.network,
             account_id,
@@ -366,10 +367,98 @@ where
             // client_backend 0.25 added optional input locking; no locks are held across calls.
             None,
             None,
-        )
-        .map_err(|_e| Error::Generic("something bad happened when calling propose transfer. Possibly insufficient balance..".to_string()))?;
+        );
+        Ok(proposal.map_err(|_e| ()))
+    }
+
+    ///
+    /// Create a transaction proposal to send funds from the wallet to a given address
+    ///
+    pub async fn propose_transfer(
+        &self,
+        account_id: AccountId,
+        to_address: ZcashAddress,
+        value: u64,
+    ) -> Result<Proposal<StandardFeeRule, NoteRef>, Error> {
+        let request = TransactionRequest::new(vec![Payment::without_memo(
+            to_address,
+            Zatoshis::from_u64(value)?,
+        )])?;
+        let proposal = self.propose_request(account_id, request).await?.map_err(|_| {
+            Error::Generic("something bad happened when calling propose transfer. Possibly insufficient balance..".to_string())
+        })?;
         tracing::info!("Transfer proposal created");
         Ok(proposal)
+    }
+
+    ///
+    /// Propose a transaction paying one or more recipients, each with an optional memo.
+    /// Everything is validated first (see `payments`), so bad input fails with a typed error.
+    ///
+    pub async fn propose_payments(
+        &self,
+        account_id: AccountId,
+        payments: Vec<PaymentSpec>,
+    ) -> Result<Proposal<StandardFeeRule, NoteRef>, Error> {
+        let validated = validate_payments(self.network.network_type(), &payments)?;
+        self.propose_validated(account_id, validated).await
+    }
+
+    ///
+    /// Propose a transaction from a ZIP 321 payment URI (`zcash:...`).
+    ///
+    pub async fn propose_from_zip321(
+        &self,
+        account_id: AccountId,
+        uri: &str,
+    ) -> Result<Proposal<StandardFeeRule, NoteRef>, Error> {
+        let validated = validate_uri(self.network.network_type(), uri)?;
+        self.propose_validated(account_id, validated).await
+    }
+
+    async fn propose_validated(
+        &self,
+        account_id: AccountId,
+        validated: ValidatedPayments,
+    ) -> Result<Proposal<StandardFeeRule, NoteRef>, Error> {
+        let summary = self
+            .db
+            .read()
+            .await
+            .get_wallet_summary(self.min_confirmations)?;
+        if let Some(balance) = summary
+            .as_ref()
+            .and_then(|s| s.account_balances().get(&account_id))
+        {
+            check_spendable(validated.total(), spendable_shielded(balance))?;
+        }
+        let proposal = self
+            .propose_request(account_id, validated.request)
+            .await?
+            .map_err(|_| {
+                PaymentsError::Proposal(
+                    "the wallet could not build a transaction for these payments".to_string(),
+                )
+            })?;
+        tracing::info!("Payments proposal created");
+        Ok(proposal)
+    }
+
+    ///
+    /// Propose, prove, sign and broadcast a multi-recipient payment with optional memos.
+    ///
+    pub async fn transfer_payments(
+        &self,
+        seed_phrase: &str,
+        account_hd_index: u32,
+        from_account_id: AccountId,
+        payments: Vec<PaymentSpec>,
+    ) -> Result<(), Error> {
+        let (usk, _) = usk_from_seed_str(seed_phrase, account_hd_index, &self.network)?;
+        let proposal = self.propose_payments(from_account_id, payments).await?;
+        let txids = self.create_proposed_transactions(proposal, &usk).await?;
+        tracing::info!("Sending transactions");
+        self.send_authorized_transactions(&txids).await
     }
 
     ///

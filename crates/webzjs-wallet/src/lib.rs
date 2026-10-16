@@ -10,6 +10,7 @@ mod balance;
 mod chain_params;
 mod error;
 pub mod init;
+pub mod payments;
 pub mod validation;
 
 pub mod wallet;

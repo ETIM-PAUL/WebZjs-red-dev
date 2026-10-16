@@ -27,6 +27,8 @@ pub enum Error {
     AddressGeneration(#[from] zcash_keys::keys::AddressGenerationError),
     #[error("Error attempting to decode address: {0}")]
     AddressDecoding(#[from] zcash_address::ParseError),
+    #[error("Invalid payments: {0}")]
+    Payments(#[from] crate::payments::PaymentsError),
     #[error("Error attempting to decode key: {0}")]
     KeyDecoding(String),
     #[error("Invalid network string given: {0}")]
