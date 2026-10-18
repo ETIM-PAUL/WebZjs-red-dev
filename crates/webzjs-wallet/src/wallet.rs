@@ -33,7 +33,7 @@ use tokio::sync::RwLock;
 use zcash_address::ZcashAddress;
 use zcash_client_backend::data_api::wallet::input_selection::SpendPolicy;
 use zcash_client_backend::data_api::wallet::{
-    create_pczt_from_proposal, create_proposed_transactions,
+    create_pczt_from_proposal, create_proposed_transactions, decrypt_and_store_transaction,
     extract_and_store_transaction_from_pczt, input_selection::GreedyInputSelector,
     propose_shielding, propose_transfer, ConfirmationsPolicy, SpendingKeys,
 };
@@ -54,7 +54,7 @@ use zcash_client_memory::{MemBlockCache, MemoryWalletDb};
 use zcash_keys::keys::{UnifiedFullViewingKey, UnifiedSpendingKey};
 use zcash_primitives::transaction::builder::BundlePadding;
 use zcash_primitives::transaction::fees::FeeRule;
-use zcash_primitives::transaction::TxId;
+use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_proofs::prover::LocalTxProver;
 
 use zcash_client_backend::sync::run;
@@ -104,6 +104,18 @@ pub struct Wallet<W, T> {
     pub(crate) min_split_output_value: u64,
 }
 
+/// A wallet database that can say which transactions still need to be downloaded in full before
+/// their memos can be read (see `Wallet::sync`).
+pub trait PendingEnhancement {
+    fn txids_needing_enhancement(&self) -> Vec<TxId>;
+}
+
+impl<P: Parameters> PendingEnhancement for MemoryWalletDb<P> {
+    fn txids_needing_enhancement(&self) -> Vec<TxId> {
+        MemoryWalletDb::txids_needing_enhancement(self)
+    }
+}
+
 impl<W, T: Clone> Clone for Wallet<W, T> {
     fn clone(&self) -> Self {
         Self {
@@ -134,7 +146,8 @@ where
             AccountId = <W as WalletRead>::AccountId,
             Error = <W as WalletRead>::Error,
             NoteRef = NoteRef,
-        > + WalletCommitmentTrees,
+        > + WalletCommitmentTrees
+        + PendingEnhancement,
 
     AccountId: Copy
         + Debug
@@ -296,7 +309,70 @@ where
             BATCH_SIZE,
         )
         .await
-        .map_err(Into::into)
+        .map_err(Into::<Error>::into)?;
+        // Scanning cannot read memos; fetch and decrypt the full transactions that pay us.
+        self.enhance_transactions(&mut client, &mut *db).await;
+        Ok(())
+    }
+
+    /// Download and decrypt every transaction that pays the wallet but has not been stored in
+    /// full yet, so that received memos (and, with the outgoing viewing key, sent memos) can be
+    /// read. Compact blocks carry no memos, so without this step they stay empty.
+    ///
+    /// Best effort: a transaction that cannot be fetched or parsed is logged and retried on the
+    /// next sync; it never fails the sync itself.
+    async fn enhance_transactions(&self, client: &mut CompactTxStreamerClient<T>, db: &mut W) {
+        let txids = db.txids_needing_enhancement();
+        if txids.is_empty() {
+            return;
+        }
+        tracing::info!(
+            "Fetching {} transaction(s) to read their memos",
+            txids.len()
+        );
+        for txid in txids {
+            let filter = service::TxFilter {
+                hash: txid.as_ref().to_vec(),
+                ..Default::default()
+            };
+            let raw = match client.get_transaction(filter).await {
+                Ok(r) => r.into_inner(),
+                Err(e) => {
+                    tracing::warn!("enhance: could not fetch {}: {}", txid, e.code());
+                    continue;
+                }
+            };
+            // Height 0 / out-of-range means "not mined" (mempool or not in the main chain).
+            let mined_height = u32::try_from(raw.height)
+                .ok()
+                .filter(|h| *h > 0)
+                .map(BlockHeight::from_u32);
+            let branch_height = match mined_height {
+                Some(h) => h,
+                None => match db.chain_height() {
+                    Ok(Some(tip)) => tip + 1,
+                    _ => continue,
+                },
+            };
+            let branch_id = BranchId::for_height(&self.network, branch_height);
+            let tx = match Transaction::read(&raw.data[..], branch_id) {
+                Ok(tx) => tx,
+                Err(e) => {
+                    tracing::warn!("enhance: could not parse {}: {}", txid, e);
+                    continue;
+                }
+            };
+            if tx.txid() != txid {
+                tracing::warn!(
+                    "enhance: server returned a different transaction for {}",
+                    txid
+                );
+                continue;
+            }
+            if let Err(e) = decrypt_and_store_transaction(&self.network, db, &tx, mined_height) {
+                tracing::warn!("enhance: could not store {}: {:?}", txid, e);
+            }
+        }
     }
 
     pub async fn get_wallet_summary(&self) -> Result<Option<WalletSummary<AccountId>>, Error> {
