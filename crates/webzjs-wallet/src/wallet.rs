@@ -10,6 +10,7 @@ use tonic::{
 
 use crate::chain_params::{change_pool_at, orchard_circuit_version, WalletClock};
 use crate::error::Error;
+use crate::network_upgrade::{evaluate as evaluate_network, ChainInfo, NetworkStatus};
 use crate::payments::{
     check_spendable, spendable_shielded, validate_payments, validate_uri, PaymentSpec,
     PaymentsError, ValidatedPayments,
@@ -295,7 +296,29 @@ where
         })?)
     }
 
+    /// Ask the server which consensus branch its chain is on and compare it with the branch the
+    /// library's own consensus parameters give for that height (see `network_upgrade`).
+    pub async fn network_status(&self) -> Result<NetworkStatus, Error> {
+        let mut client = self.client.clone();
+        let info = client
+            .get_lightd_info(service::Empty {})
+            .await?
+            .into_inner();
+        Ok(evaluate_network(&self.network, &ChainInfo::from(&info)))
+    }
+
+    /// Fail with `UnsupportedNetworkUpgrade` unless the chain is on a supported consensus branch.
+    /// Called before syncing and before building or proving any transaction.
+    pub async fn check_network_upgrade(&self) -> Result<(), Error> {
+        let status = self.network_status().await?;
+        for warning in &status.warnings {
+            tracing::warn!("{warning}");
+        }
+        Ok(status.require_supported()?)
+    }
+
     pub async fn sync(&self) -> Result<(), Error> {
+        self.check_network_upgrade().await?;
         let mut client = self.client.clone();
         // TODO: This should be held in the Wallet struct so we can download in parallel
         let db_cache = MemBlockCache::new();
@@ -559,6 +582,7 @@ where
         proposal: Proposal<StandardFeeRule, NoteRef>,
         usk: &UnifiedSpendingKey,
     ) -> Result<NonEmpty<TxId>, Error> {
+        self.check_network_upgrade().await?;
         let prover = LocalTxProver::bundled();
         let mut db = self.db.write().await;
         let transactions = create_proposed_transactions::<
@@ -656,6 +680,7 @@ where
     }
 
     pub async fn pczt_shield(&self, account_id: AccountId) -> Result<Pczt, Error> {
+        self.check_network_upgrade().await?;
         tracing::info!("pczt_shield: Starting for account {:?}", account_id);
 
         // Ensure wallet is synced to latest block before creating transaction
@@ -883,6 +908,7 @@ where
         request: TransactionRequest,
         on_refused: impl FnOnce(String) -> Error,
     ) -> Result<Pczt, Error> {
+        self.check_network_upgrade().await?;
         let proposal = self
             .propose_request(account_id, request)
             .await?

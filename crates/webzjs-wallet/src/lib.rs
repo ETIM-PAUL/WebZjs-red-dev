@@ -11,6 +11,7 @@ mod chain_params;
 mod error;
 pub mod init;
 pub mod memo;
+pub mod network_upgrade;
 pub mod payments;
 pub mod validation;
 

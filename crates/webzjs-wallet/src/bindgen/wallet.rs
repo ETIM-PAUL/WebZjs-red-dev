@@ -274,6 +274,9 @@ impl WebWallet {
     ///
     pub async fn sync(&self) -> Result<(), Error> {
         assert!(!thread::is_web_worker_thread());
+        // Checked here, on the calling thread, so an unsupported chain reaches JavaScript as the
+        // typed `unsupported_network_upgrade` error rather than as a stringified sync failure.
+        self.inner.check_network_upgrade().await?;
 
         let db = self.inner.clone();
 
@@ -344,6 +347,19 @@ impl WebWallet {
             .propose_transfer(AccountId::from(account_id), to_address, value)
             .await?;
         Ok(proposal.into())
+    }
+
+    /// Ask the server which consensus branch its chain is on and compare it with the branch the
+    /// library's consensus parameters give for that height.
+    ///
+    /// Call this right after creating the wallet: it tells an app whether it can safely go on, and
+    /// whether the server announced an upgrade the library does not support yet. It never throws
+    /// for an unsupported chain; `supported` is false instead. `sync` and everything that builds
+    /// a transaction do throw (`code: "unsupported_network_upgrade"`) in that case.
+    #[wasm_bindgen(js_name = getNetworkStatus, unchecked_return_type = "NetworkStatus")]
+    pub async fn get_network_status(&self) -> Result<JsValue, Error> {
+        let status = self.inner.network_status().await?;
+        Ok(super::network::to_js(&status))
     }
 
     /// Propose one transaction that pays one or more recipients, each with an optional memo.
@@ -425,6 +441,7 @@ impl WebWallet {
         account_hd_index: u32,
     ) -> Result<Vec<u8>, Error> {
         assert!(!thread::is_web_worker_thread());
+        self.inner.check_network_upgrade().await?;
 
         let (usk, _) = usk_from_seed_str(seed_phrase, account_hd_index, &self.inner.network)?;
         let db = self.inner.clone();
