@@ -1,0 +1,72 @@
+[
+ {
+  "name": "1. banner turns red on an unsupported chain",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "1. sending is disabled while the chain is unsupported",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "2. banner is green and names the supported upgrade",
+  "ok": true,
+  "note": "Network supported (Nu7) | Branch 77190ad9 at height 4519860."
+ },
+ {
+  "name": "2. wallet shows a testnet address",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "2. wallet has a spendable balance",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "3. a bad hex memo is refused with a clear message",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "3. review lists the three outputs, the text memo, the binary memo and the fee",
+  "ok": true,
+  "note": "review table: 3 rows (text, binary 512 B, none), change and fee shown"
+ },
+ {
+  "name": "4. the UI sent one transaction",
+  "ok": true,
+  "note": "txid f2c155668367a9204c5cae83647c73907697d5f38e6fe1c06d9e3c955d593dad"
+ },
+ {
+  "name": "5. history lists the transaction as confirmed",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "5. history shows the text memo as text",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "5. history shows the binary memo as hex",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "5. history shows the output without a memo",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "6. recipient B received the text memo and the no-memo output",
+  "ok": true,
+  "note": "empty,text"
+ },
+ {
+  "name": "6. recipient C read the binary memo byte-for-byte",
+  "ok": true,
+  "note": "arbitrary"
+ }
+]

@@ -1,0 +1,47 @@
+[
+ {
+  "name": "0. typings declare getNetworkStatus(): Promise<NetworkStatus>",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "1. testnet wallet vs testnet server: supported",
+  "ok": true,
+  "note": "branch=77190ad9 height=4516359 next=none warnings=0"
+ },
+ {
+  "name": "1. server branch is the NU7 branch the library expects",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "1. known upgrades come from the library: newest is Nu7 at 4465026",
+  "ok": true,
+  "note": "Sprout,Overwinter,Sapling,Blossom,Heartwood,Canopy,Nu5,Nu6,Nu6.1,Nu6.2,Nu6.3,Nu7"
+ },
+ {
+  "name": "2. mainnet wallet vs mainnet server: supported (real match on mainnet)",
+  "ok": true,
+  "note": "branch=37a5165b height=3522479 next=none warnings=0"
+ },
+ {
+  "name": "2. mainnet: newest known upgrade is not Nu7 (no mainnet height yet)",
+  "ok": true,
+  "note": "Nu6.3"
+ },
+ {
+  "name": "3. mismatch: getNetworkStatus reports supported=false and does not throw",
+  "ok": true,
+  "note": "branch=37a5165b height=3522479 next=Nu6.1@3536500(library,lib=true) warnings=0"
+ },
+ {
+  "name": "3. mismatch: sync throws an Error with code unsupported_network_upgrade",
+  "ok": true,
+  "note": "{\"code\":\"unsupported_network_upgrade\"}"
+ },
+ {
+  "name": "3. mismatch: error carries chain branch id, chain height and newest known upgrade",
+  "ok": true,
+  "note": "branch=37a5165b height=3522479 newest=Nu7"
+ }
+]

@@ -1,0 +1,157 @@
+[
+ {
+  "name": "0. endpoint is the NU7 testnet",
+  "ok": true,
+  "note": "chain=test branch=0x77190ad9 tip=4508084"
+ },
+ {
+  "name": "0. wasm + thread pool initialised",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "1. restore + sync the funded wallet",
+  "ok": true,
+  "note": "scanned=4508086 tip=4508086"
+ },
+ {
+  "name": "1. enough spendable shielded funds for the test",
+  "ok": true,
+  "note": "need>=480000 have>=need:true"
+ },
+ {
+  "name": "2. recipient wallets B and C created",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "3. rejects with code no_payments",
+  "ok": true,
+  "note": "got no_payments"
+ },
+ {
+  "name": "3. rejects with code invalid_address",
+  "ok": true,
+  "note": "got invalid_address"
+ },
+ {
+  "name": "3. rejects with code memo_for_transparent_recipient",
+  "ok": true,
+  "note": "got memo_for_transparent_recipient"
+ },
+ {
+  "name": "3. rejects with code memo_too_long",
+  "ok": true,
+  "note": "got memo_too_long"
+ },
+ {
+  "name": "3. rejects with code memo_too_long",
+  "ok": true,
+  "note": "got memo_too_long"
+ },
+ {
+  "name": "3. rejects with code invalid_memo_type",
+  "ok": true,
+  "note": "got invalid_memo_type"
+ },
+ {
+  "name": "3. rejects with code malformed_payment",
+  "ok": true,
+  "note": "got malformed_payment"
+ },
+ {
+  "name": "3. rejects with code invalid_amount",
+  "ok": true,
+  "note": "got invalid_amount"
+ },
+ {
+  "name": "3. rejects with code invalid_amount",
+  "ok": true,
+  "note": "got invalid_amount"
+ },
+ {
+  "name": "3. rejects with code insufficient_funds",
+  "ok": true,
+  "note": "got insufficient_funds"
+ },
+ {
+  "name": "3. malformed ZIP-321 URI rejected with code invalid_uri",
+  "ok": true,
+  "note": "got invalid_uri"
+ },
+ {
+  "name": "4. pczt_create_payments builds a PCZT for the same payments",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "4. existing pczt_create still works unchanged",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "4. proposal reports three outputs with the right memo kinds",
+  "ok": true,
+  "note": "text,bytes,none"
+ },
+ {
+  "name": "4. proposal reports amounts",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "4. raw memo is reported as the full 512 bytes",
+  "ok": true,
+  "note": "len=512"
+ },
+ {
+  "name": "4. proposal reports a ZIP 317 fee (multiple of 5000, plausible)",
+  "ok": true,
+  "note": "fee=20000"
+ },
+ {
+  "name": "5. one transaction built, proved, signed and broadcast",
+  "ok": true,
+  "note": "txid 23acbef465b98583f581977927ded0f9749e15987de43fe64254b05606a7e891"
+ },
+ {
+  "name": "6. transaction is mined",
+  "ok": true,
+  "note": "height 4508088"
+ },
+ {
+  "name": "6. transaction carries consensus branch id 0x77190ad9",
+  "ok": true,
+  "note": "branch=0x77190ad9"
+ },
+ {
+  "name": "7. recipient B received both its outputs (exact total)",
+  "ok": true,
+  "note": "ok=true"
+ },
+ {
+  "name": "7. recipient C received its output (exact amount)",
+  "ok": true,
+  "note": "ok=true"
+ },
+ {
+  "name": "7. sender balance fell by outputs + the reported fee",
+  "ok": true,
+  "note": "fee-matches=true"
+ },
+ {
+  "name": "8. recipient history lists the transaction",
+  "ok": false,
+  "note": "entries=0"
+ },
+ {
+  "name": "8. text memo reads back in the existing memo field",
+  "ok": false,
+  "note": "memos="
+ },
+ {
+  "name": "8. the output without a memo has none",
+  "ok": false,
+  "note": "memos="
+ }
+]

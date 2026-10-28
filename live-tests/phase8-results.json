@@ -1,0 +1,92 @@
+[
+ {
+  "name": "0. endpoint is the NU7 testnet",
+  "ok": true,
+  "note": "chain=test branch=0x77190ad9 tip=4506294"
+ },
+ {
+  "name": "0. wasm + thread pool initialised",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "1. create wallet + unified address",
+  "ok": true,
+  "note": "address length 182"
+ },
+ {
+  "name": "2. sync to chain tip (library runs it in its own Web Worker)",
+  "ok": true,
+  "note": "scanned=4506295 tip=4506295"
+ },
+ {
+  "name": "3. faucet payout sent",
+  "ok": true,
+  "note": "txid 7418b4de44f02264e09edc606cafef10f1ecfc79b378151497c4730fba8bf8ed"
+ },
+ {
+  "name": "3. wallet sees the faucet funds",
+  "ok": true,
+  "note": "pools {\"ironwood\":true,\"orchard\":false,\"sapling\":false,\"pending\":false}"
+ },
+ {
+  "name": "3. funds are in the Ironwood pool (current shielded pool)",
+  "ok": true,
+  "note": "{\"ironwood\":true,\"orchard\":false,\"sapling\":false,\"pending\":false}"
+ },
+ {
+  "name": "3. funds become spendable in Ironwood",
+  "ok": true,
+  "note": "{\"ironwood\":true,\"orchard\":false,\"sapling\":false,\"pending\":false}"
+ },
+ {
+  "name": "4. serialized wallet (v2) reloads with the same balance",
+  "ok": true,
+  "note": "bytes=8259"
+ },
+ {
+  "name": "5. restore from seed gives the same address",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "5. restored wallet finds the same funds",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "6. propose a shielded payment",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "6. build, sign, prove and broadcast",
+  "ok": true,
+  "note": "txid 37268e66bffcf2185c7b4bc5cd81dfdee7566ff093d3f4c848cba8a81129d4b5"
+ },
+ {
+  "name": "7. transaction is mined",
+  "ok": true,
+  "note": "height 4506299"
+ },
+ {
+  "name": "8. second wallet receives exactly the amount sent",
+  "ok": true,
+  "note": "pools {\"ironwood\":true,\"orchard\":false,\"sapling\":false,\"pending\":false}"
+ },
+ {
+  "name": "8. sender balance fell by amount + a plausible fee",
+  "ok": true,
+  "note": "fee-ok=true"
+ },
+ {
+  "name": "9. built transaction carries consensus branch id 0x77190ad9",
+  "ok": true,
+  "note": "branch=0x77190ad9 version=6 overwintered=true group=0xd884b698"
+ },
+ {
+  "name": "10. shield transparent funds",
+  "ok": true,
+  "note": "NOT APPLICABLE: the faucet pays shielded, so there are no transparent funds to shield"
+ }
+]

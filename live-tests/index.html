@@ -1,0 +1,11 @@
+<!doctype html><meta charset=utf-8><body>harness
+<script type=module>
+import initW, { initThreadPool, WebWallet } from '/webzjs-wallet/webzjs_wallet.js';
+import initK, { generate_seed_phrase } from '/webzjs-keys/webzjs_keys.js';
+window.api = { initW, initK, initThreadPool, WebWallet, generate_seed_phrase };
+import { H } from '/h/handlers.js';
+// Phase 8: calls run on the main thread; the library itself runs the sync in a Web Worker.
+window.startWorker = async () => true;
+window.rpc = (op, args) => H[op](...args);
+window.ready = true;
+</script>

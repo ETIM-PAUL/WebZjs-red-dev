@@ -1,0 +1,82 @@
+[
+ {
+  "name": "1. recipient history lists the Phase 10 transaction",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "1. two received outputs",
+  "ok": true,
+  "note": "n=2"
+ },
+ {
+  "name": "1. one is a text memo, one is arbitrary data",
+  "ok": true,
+  "note": "arbitrary,text"
+ },
+ {
+  "name": "1. text memo: decoded text is exact",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "1. text memo: raw bytes are the full 512, byte-for-byte",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "1. binary memo: raw bytes read back byte-for-byte (512, zero padded)",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "1. binary memo has no decoded text",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "1. raw bytes arrive in JavaScript as a Uint8Array",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "1. existing text field still works",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "2. no-memo output reports type empty with 0xF6 padding",
+  "ok": true,
+  "note": "empty"
+ },
+ {
+  "name": "2. existing text field is null for it",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "3. sender sees three sent outputs",
+  "ok": true,
+  "note": "n=3"
+ },
+ {
+  "name": "3. sent: text memo exact",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "3. sent: binary memo byte-for-byte",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "3. sent: no-memo output is empty",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "name": "4. after save/reload the memos are still there, byte-for-byte",
+  "ok": true,
+  "note": "n=2"
+ }
+]
