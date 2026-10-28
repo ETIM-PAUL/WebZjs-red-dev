@@ -5,6 +5,10 @@
 
 A javascript client library for building Zcash browser wallets
 
+> **ZECATHON submission (Core & Tooling):** this branch adds NU7 support, a multi-payment API
+> with text and raw-byte memos, raw memo access in history and a network-upgrade check, with a
+> testnet demo and live test scripts. Start with **[SUBMISSION.md](SUBMISSION.md)**.
+
 ## Overview
 
 WebZjs aims to make it simple to securely interact with Zcash from within the browser. This is primarily to support the development of web wallets and browser plugins. 
