@@ -1,0 +1,11 @@
+{
+  "name": "webzjs-testnet-demo",
+  "private": true,
+  "type": "module",
+  "description": "Static testnet demo of WebZjs: multi-payment sends with memos, memo history and the network-upgrade banner",
+  "scripts": {
+    "test": "node --test test/lib.test.mjs",
+    "build": "node build.mjs",
+    "serve": "node serve.mjs"
+  }
+}

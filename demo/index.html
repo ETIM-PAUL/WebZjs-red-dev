@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WebZjs NU7 testnet demo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>WebZjs · NU7 + memos <span class="tag">testnet only</span></h1>
+    <p class="sub">Send one transaction to several people, each with a text or hex memo, and read memos back. Uses throwaway testnet keys that stay in this browser. Never paste a real seed phrase here.</p>
+  </header>
+
+  <div id="banner" class="banner" role="status">Checking the network…</div>
+
+  <main>
+    <section id="wallet">
+      <h2>Wallet</h2>
+      <div id="setup" hidden>
+        <p>No wallet yet.</p>
+        <button id="create">Create a throwaway testnet wallet</button>
+        <details>
+          <summary>or use an existing testnet seed phrase</summary>
+          <input id="seed-input" type="password" autocomplete="off" placeholder="24-word testnet seed phrase" aria-label="Seed phrase">
+          <input id="birthday-input" type="number" placeholder="birthday height (optional)" aria-label="Birthday height">
+          <button id="restore">Use this seed</button>
+        </details>
+      </div>
+      <div id="account" hidden>
+        <p class="label">Address <button id="copy-address" class="small">Copy</button></p>
+        <p id="address" class="mono wrap"></p>
+        <p class="label">Balance</p>
+        <p id="balance" class="big">–</p>
+        <p id="balance-detail" class="muted"></p>
+        <p>
+          <button id="sync">Sync now</button>
+          <span id="sync-status" class="muted"></span>
+        </p>
+        <p class="muted">Need testnet funds? Request some for the address above from the <a href="https://faucet.testnet.valargroup.dev" target="_blank" rel="noopener">testnet faucet</a>. They arrive in a minute or two.</p>
+        <p><button id="forget" class="small danger">Forget this wallet</button></p>
+      </div>
+    </section>
+
+    <section id="send">
+      <h2>Send</h2>
+      <p class="muted">Each payment can carry a memo (shielded recipients only, up to 512 bytes). Text is sent as a text memo; hex is sent as raw bytes.</p>
+      <div id="rows"></div>
+      <p>
+        <button id="add-row" class="small">+ Add payment</button>
+        <button id="paste-uri" class="small">Fill from a payment URI…</button>
+      </p>
+      <p>
+        <button id="propose" disabled>Review transaction</button>
+      </p>
+      <div id="review" hidden></div>
+      <div id="result" role="status"></div>
+    </section>
+
+    <section id="history">
+      <h2>History</h2>
+      <div id="history-list" class="muted">Nothing yet.</div>
+    </section>
+  </main>
+
+  <footer>
+    <p class="muted">Library: <a href="https://github.com/ZcashCommunityGrants/WebZjs" target="_blank" rel="noopener">WebZjs</a> with NU7 support and the multi-payment/memo API. Server: <span id="server" class="mono"></span></p>
+  </footer>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
